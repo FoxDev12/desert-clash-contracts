@@ -258,7 +258,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
     * So each time we :
     * Select 2 bytes from the seed 
     * (sequentially, so 1st 2 bytes are used to generate the 1st trait etc) 
-    * (given that the seed is 32 bytes and we generate 4 traits, most of the seed is actually never used )
+    * (given that the seed is 32 bytes and we generate 7 traits, some of the seed is actually never used )
     * logical AND them with 0xFFFF, which um... does nothing? Why? Is it supposed to make the code look scarier?
     * (Wastes gas anyways, so cut that out)
     * 
