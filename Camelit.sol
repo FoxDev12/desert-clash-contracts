@@ -15,23 +15,25 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   uint256 public constant MINT_PRICE = 0.03 ether;
   // max number of tokens that can be minted - 15000 in production
   uint256 public immutable MAX_TOKENS;
-  // number of tokens that can be claimed for free - 50% of MAX_TOKENS
-  uint256 public PAID_TOKENS;
+  // number of tokens that are minted with WETH - 50% of MAX_TOKENS
+  uint256 public immutable PAID_TOKENS;
   // number of tokens have been minted so far
   uint16 public minted;
-
+  uint256 public banditsMinted;
+  uint256 public immutable MAX_BANDITS;
   // mapping from tokenId to a struct containing the token's traits
   mapping(uint256 => CamelBandit) public tokenTraits;
   // mapping from hashed(tokenTrait) to the tokenId it's associated with
   // used to ensure there are no duplicates
   mapping(uint256 => uint256) public existingCombinations;
-
+  
+  //NOTE At least he changed the names lol
   // list of probabilities for each trait type
-  // 0 - 9 are associated with Camel, 10 - 19 are associated with Bandit
-  uint8[][20] public rarities;
+  // 0 - 3 are associated with Camel, 4 - 6 are associated with Bandit
+  uint8[][7] public rarities;
   // list of aliases for Walker's Alias algorithm
-  // 0 - 9 are associated with Camel, 10 - 19 are associated with Bandit
-  uint8[][20] public aliases;
+  // 0 - 3 are associated with Camel, 4 - 6 are associated with Bandit
+  uint8[][7] public aliases;
 
   // reference to the Pool for choosing random Bandit
   IPool public pool;
@@ -48,8 +50,12 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
     traits = ITraits(_traits);
     MAX_TOKENS = _maxTokens;
     PAID_TOKENS = _maxTokens / 2;
+    MAX_BANDITS = _maxTokens / 10;
 
-
+// NOTE Sorta makes sense intuitively but look this up. TODO Probably dont need it actually since all rarities are the same, just mod a random input 
+// CAMELS :  background, tree, eyes, necklaces, headwear, backAccessories, smokingsStuff (0-6)
+// BANDITS : background, eyes, faceAccessories, weapons, companions (7-13) // TODO Hardcode 0 for 14 ig. 
+// NOTE what are aliases? unclear for now    
     // I know this looks weird but it saves users gas by making lookup O(1)
     // A.J. Walker's Alias Algorithm
     // camel
@@ -132,7 +138,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
       require(minted + amount <= PAID_TOKENS, "All tokens on-sale already sold");
       require(WETH.transferFrom(msg.sender, address(this), amount * MINT_PRICE), "CamelNFT: transferFrom failed");  
     } else {
-      require(gold.burn(msg.sender, getPrice(amount, firstTokenID)), "CamelNFT: $GODL burn failed");
+      require(gold.burn(msg.sender, getPrice(amount, firstTokenID)), "CamelNFT: $GOLD burn failed");
     }
 
     uint256 totalGold = 0;
@@ -161,7 +167,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
     address to,
     uint256 tokenId
   ) public virtual override {
-    // Hardcode the Pool's approval so that users don't have to waste gas approving // @NOTE I dont like this that much
+    // Hardcode the Pool's approval so that users don't have to waste gas approving // NOTE I dont like this that much
     if (_msgSender() != address(pool)) {
       require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
     }
@@ -181,7 +187,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   function getPrice(uint256 amount, uint256 firstTokenID) internal pure returns(uint256) {
     uint256 totalPrice;
     for(uint i; i < amount; i++) {
-      totalPrice += (((firstTokenID + i - 5000) / 200) * 20) + 150);
+      totalPrice += (((firstTokenID + i - 5000) / 200) * 20) + 150;
     }
     return totalPrice;
   }
@@ -234,8 +240,30 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
    * @return t -  a struct of randomly selected traits
    */
   function selectTraits(uint256 seed) internal view returns (CamelBandit memory t) {    
+    // 1/10, doesnt enforce that theres actually 10% bandits though, hardcode this.  
     t.isCamel = (seed & 0xFFFF) % 10 != 0;
+    // NOTE Mitigation
+    if (!t.isCamel) {
+      // NOTE superior or equal, even if it should never happen anyways)
+      if(banditsMinted >= MAX_BANDITS) {
+        t.isCamel = true;
+      }
+      else {
+        banditsMinted++;
+      }
+    }
     uint8 shift = t.isCamel ? 0 : 10;
+    // NOTE
+    /**
+    * So each time we :
+    * Select 2 bytes from the seed 
+    * (sequentially, so 1st 2 bytes are used to generate the 1st trait etc) 
+    * (given that the seed is 32 bytes and we generate 4 traits, most of the seed is actually never used )
+    * logical AND them with 0xFFFF, which um... does nothing? Why? Is it supposed to make the code look scarier?
+    * (Wastes gas anyways, so cut that out)
+    * 
+    */  
+    // TLDR this code is awful 
     seed >>= 16;
     t.fur = selectTrait(uint16(seed & 0xFFFF), 0 + shift);
     seed >>= 16;
@@ -286,7 +314,8 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
    * @param seed a value ensure different outcomes for different sources in the same block
    * @return a pseudorandom value
    */
-   // NOTE somewhat vulnerable
+   // NOTE somewhat vulnerable, a lil better now, 
+   // TODO which chain? ask owners. block.coinbase is a bad randomness factor on chains with MEV and on ultra restricted chains like the bsc
   function random(uint256 seed) internal view returns (uint256) {
     return uint256(keccak256(abi.encodePacked(
       tx.origin,
