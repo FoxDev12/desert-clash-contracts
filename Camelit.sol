@@ -26,14 +26,12 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   // mapping from hashed(tokenTrait) to the tokenId it's associated with
   // used to ensure there are no duplicates
   mapping(uint256 => uint256) public existingCombinations;
-  
-  //NOTE At least he changed the names lol
-  // list of probabilities for each trait type
-  // 0 - 3 are associated with Camel, 4 - 6 are associated with Bandit
-  uint8[][7] public rarities;
-  // list of aliases for Walker's Alias algorithm
-  // 0 - 3 are associated with Camel, 4 - 6 are associated with Bandit
-  uint8[][7] public aliases;
+  struct SingleTrait {
+      uint8 pNothing;
+      uint8 numTraits;
+    }
+  SingleTrait[] traitsProbabilities;  
+
 
   // reference to the Pool for choosing random Bandit
   IPool public pool;
@@ -41,95 +39,55 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   GOLD public gold;
   // reference to Traits
   ITraits public traits;
-  
+  // NOTE well i like code that i can understand, upon reading about AJ Walkers alias algorithm, it sounds absolutely great, but im stupid so i'll do without x) 
   /** 
    * instantiates contract and rarity tables
    */
+
   constructor(address _gold, address _traits, uint256 _maxTokens) ERC721("Desert Clash Game", 'DesertGAME') { 
     gold = GOLD(_gold);
     traits = ITraits(_traits);
     MAX_TOKENS = _maxTokens;
     PAID_TOKENS = _maxTokens / 2;
     MAX_BANDITS = _maxTokens / 10;
+    // Rewriting gen algo TODO : we only have 2 cases : all with same rarities / Nothing or all with same rarities, probably only store p(nothing) and the number of traits for each trait. 
 
-// NOTE Sorta makes sense intuitively but look this up. TODO Probably dont need it actually since all rarities are the same, just mod a random input 
-// CAMELS :  background, tree, eyes, necklaces, headwear, backAccessories, smokingsStuff (0-6)
-// BANDITS : background, eyes, faceAccessories, weapons, companions (7-13) // TODO Hardcode 0 for 14 ig. 
-// NOTE what are aliases? unclear for now    
-    // I know this looks weird but it saves users gas by making lookup O(1)
-    // A.J. Walker's Alias Algorithm
-    // camel
-    // fur
-    rarities[0] = [15, 50, 200, 250, 255];
-    aliases[0] = [4, 4, 4, 4, 4];
-    // head
-    rarities[1] = [190, 215, 240, 100, 110, 135, 160, 185, 80, 210, 235, 240, 80, 80, 100, 100, 100, 245, 250, 255];
-    aliases[1] = [1, 2, 4, 0, 5, 6, 7, 9, 0, 10, 11, 17, 0, 0, 0, 0, 4, 18, 19, 19];
-    // ears
-    rarities[2] =  [255, 30, 60, 60, 150, 156];
-    aliases[2] = [0, 0, 0, 0, 0, 0];
-    // eyes
-    rarities[3] = [221, 100, 181, 140, 224, 147, 84, 228, 140, 224, 250, 160, 241, 207, 173, 84, 254, 220, 196, 140, 168, 252, 140, 183, 236, 252, 224, 255];
-    aliases[3] = [1, 2, 5, 0, 1, 7, 1, 10, 5, 10, 11, 12, 13, 14, 16, 11, 17, 23, 13, 14, 17, 23, 23, 24, 27, 27, 27, 27];
-    // nose
-    rarities[4] = [175, 100, 40, 250, 115, 100, 185, 175, 180, 255];
-    aliases[4] = [3, 0, 4, 6, 6, 7, 8, 8, 9, 9];
-    // mouth
-    rarities[5] = [80, 225, 227, 228, 112, 240, 64, 160, 167, 217, 171, 64, 240, 126, 80, 255];
-    aliases[5] = [1, 2, 3, 8, 2, 8, 8, 9, 9, 10, 13, 10, 13, 15, 13, 15];
-    // neck
-    rarities[6] = [255];
-    aliases[6] = [0];
-    // feet
-    rarities[7] = [243, 189, 133, 133, 57, 95, 152, 135, 133, 57, 222, 168, 57, 57, 38, 114, 114, 114, 255];
-    aliases[7] = [1, 7, 0, 0, 0, 0, 0, 10, 0, 0, 11, 18, 0, 0, 0, 1, 7, 11, 18];
-    // alphaIndex
-    rarities[8] = [243, 189, 133, 133, 57, 95, 152, 135, 133, 57, 222, 168, 57, 57, 38, 114, 114, 114, 255];
-    aliases[8] = [1, 7, 0, 0, 0, 0, 0, 10, 0, 0, 11, 18, 0, 0, 0, 1, 7, 11, 18];
-
-    rarities[9] = [243, 189, 133, 133, 57, 95, 152, 135, 133, 57, 222, 168, 57, 57, 38, 114, 114, 114, 255];
-    aliases[9] = [1, 7, 0, 0, 0, 0, 0, 10, 0, 0, 11, 18, 0, 0, 0, 1, 7, 11, 18];
+    // background
+    traitProbabilities[0] = (0,9);
+    // trees
+    traitProbabilities[1] = (0,6);
+    // Necklace
+    traitProbabilities[2] = (8,2); // 1/8 chance of something
+    // Headwear
+    traitProbabilities[3] = (4,5);
+    // Back Accessories
+    traitProbabilities[4] = (2,9);
+    // Smoking Stuff
+    traitProbabilities[5] = (4,4);
     
-    // wolves
-    // fur
-    rarities[10] = [210, 90, 9, 9, 9, 150, 9, 255, 9];
-    aliases[10] = [5, 0, 0, 5, 5, 7, 5, 7, 5];
-    // head
-    rarities[11] = [255];
-    aliases[11] = [0];
-    // ears
-    rarities[12] = [255];
-    aliases[12] = [0];
-    // eyes
-    rarities[13] = [135, 177, 219, 141, 183, 225, 147, 189, 231, 135, 135, 135, 135, 246, 150, 150, 156, 165, 171, 180, 186, 195, 201, 210, 243, 252, 255];
-    aliases[13] = [1, 2, 3, 4, 5, 6, 7, 8, 13, 3, 6, 14, 15, 16, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 26, 26];
-    // nose
-    rarities[14] = [255];
-    aliases[14] = [0];
-    // mouth
-    rarities[15] = [239, 244, 249, 234, 234, 234, 234, 234, 234, 234, 130, 255, 247];
-    aliases[15] = [1, 2, 11, 0, 11, 11, 11, 11, 11, 11, 11, 11, 11];
-    // neck
-    rarities[16] = [75, 180, 165, 120, 60, 150, 105, 195, 45, 225, 75, 45, 195, 120, 255];
-    aliases[16] = [1, 9, 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 14, 12, 14];
-    // feet 
-    rarities[17] = [255];
-    aliases[17] = [0];
-    // alphaIndex
-    rarities[18] = [8, 160, 73, 255]; 
-    aliases[18] = [2, 3, 3, 3];
-    // neck
-    rarities[19] = [75, 180, 165, 120, 60, 150, 105, 195, 45, 225, 75, 45, 195, 120, 255];
-    aliases[19] = [1, 9, 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 14, 12, 14];
-  }
+
+    // Bandits
+    // Background
+    traitProbabilities[6] = (0,9);
+    // Eyes
+    traitProbabilities[7] = (0,4);
+    // Face Accessories
+    traitProbabilities[8] = (10,5);
+    // Weapons
+    traitProbabilities[9] = (2,5);
+    // Companions
+    traitProbabilities[10] = (5,6);
+    // Have to add in a whole special case for 11 
+
 
   /** EXTERNAL */
 
   /** 
    * mint a token - 90% Camel , 10% Bandit
-   * The first 50% are free to claim, the remaining cost $GOLD
+   * The first 50% are free to claim (no), the remaining cost $GOLD
    */
   // NOTE price logic now ok  TODO look into generation
+  // TODO Make gold fully ERC20 if not already 
   function mint(uint256 amount, bool stake) external payable whenNotPaused {
     require(tx.origin == _msgSender(), "Only EOA");
     require(minted + amount <= MAX_TOKENS, "All tokens minted");
@@ -252,10 +210,10 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
         banditsMinted++;
       }
     }
-    uint8 shift = t.isCamel ? 0 : 10;
+    uint8 shift = t.isCamel ? 0 : 6;
     // NOTE
     /**
-    * So each time we :
+    *
     * Select 2 bytes from the seed 
     * (sequentially, so 1st 2 bytes are used to generate the 1st trait etc) 
     * (given that the seed is 32 bytes and we generate 7 traits, some of the seed is actually never used )
@@ -265,25 +223,22 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
     */  
     // TLDR this code is awful 
     seed >>= 16;
-    t.fur = selectTrait(uint16(seed & 0xFFFF), 0 + shift);
+    t.fur = selectTrait(uint16(seed), 0 + shift);
     seed >>= 16;
-    t.head = selectTrait(uint16(seed & 0xFFFF), 1 + shift);
+    t.head = selectTrait(uint16(seed), 1 + shift);
     seed >>= 16;
-    t.ears = selectTrait(uint16(seed & 0xFFFF), 2 + shift);
+    t.ears = selectTrait(uint16(seed), 2 + shift);
     seed >>= 16;
-    t.eyes = selectTrait(uint16(seed & 0xFFFF), 3 + shift);
+    t.eyes = selectTrait(uint16(seed), 3 + shift);
     seed >>= 16;
-    t.nose = selectTrait(uint16(seed & 0xFFFF), 4 + shift);
+    t.nose = selectTrait(uint16(seed), 4 + shift);
     seed >>= 16;
-    t.mouth = selectTrait(uint16(seed & 0xFFFF), 5 + shift);
-    seed >>= 16;
-    t.neck = selectTrait(uint16(seed & 0xFFFF), 6 + shift);
-    seed >>= 16;
-    t.body = selectTrait(uint16(seed & 0xFFFF), 7 + shift);
-    seed >>= 16;
-    t.legs = selectTrait(uint16(seed & 0xFFFF), 8 + shift);
-    seed >>= 16;
-    t.feet = selectTrait(uint16(seed & 0xFFFF), 9 + shift);
+    // yeah. 
+    if(t.isCamel) {
+    t.mouth = selectTrait(uint16(seed), 5 + shift);    }
+    else{
+      t.mouth = 0;
+    } 
   }
 
   /**
