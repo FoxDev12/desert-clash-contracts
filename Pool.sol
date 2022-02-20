@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT LICENSE
 
 pragma solidity ^0.8.0;
-
+// NOTE calculating the amount received/camel is easy af. Bandit is done masterchef style. Probably optimal. 
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 
@@ -19,7 +19,7 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
     uint80 value;
     address owner;
   }
-
+  
   event TokenStaked(address owner, uint256 tokenId, uint256 value);
   event CamelClaimed(uint256 tokenId, uint256 earned, bool unstaked);
   event BanditClaimed(uint256 tokenId, uint256 earned, bool unstaked);
@@ -128,14 +128,20 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
    * @param tokenIds the IDs of the tokens to claim earnings from
    * @param unstake whether or not to unstake ALL of the tokens listed in tokenIds
    */
+   // TODO Add stealing logic 
   function claimManyFromPool(uint16[] calldata tokenIds, bool unstake) external whenNotPaused _updateEarnings {
     uint256 owed = 0;
+    uint256 owedToBandits;
     for (uint i = 0; i < tokenIds.length; i++) {
       if (isCamel(tokenIds[i]))
-        owed += _claimCamelFromPool(tokenIds[i], unstake);
+        (owed, owedToBandits) += _claimCamelFromPool(tokenIds[i], unstake);
       else
         owed += _claimBanditFromPool(tokenIds[i], unstake);
     }
+    if (owedToBandits > 0) {
+    goldPerBandit += owedToBandits / totalBanditStaked;
+    }
+    unaccountedRewards = 0;
     if (owed == 0) return;
     gold.mint(_msgSender(), owed);
   }
@@ -150,7 +156,7 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
   function _claimCamelFromPool(uint256 tokenId, bool unstake) internal returns (uint256 owed) {
     Stake memory stake = pool[tokenId];
     require(stake.owner == _msgSender(), "SWIPER, NO SWIPING");
-    require(!(unstake), "UNSTAKING TOKEN");
+    require(!(unstake), "UNSTAKING TOKEN"); // um what? 
     if (totalGoldEarned < MAXIMUM_GLOBAL_GOLD) {
       owed = (block.timestamp - stake.value) * DAILY_GOLD_RATE / 1 days;
     } else if (stake.value > lastClaimTimestamp) {
@@ -182,6 +188,7 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
    * @param unstake whether or not to unstake the Bandit
    * @return owed - the amount of $GOLD earned
    */
+   // stake.owner == tx.origin maybe? or enforce transfer to the owner? 
   function _claimBanditFromPool(uint256 tokenId, bool unstake) internal returns (uint256 owed) {
     require(camelit.ownerOf(tokenId) == address(this), "AINT A PART OF THE POOL");
     Stake memory stake = pool[tokenId];
@@ -204,6 +211,7 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
    * emergency unstake tokens
    * @param tokenIds the IDs of the tokens to claim earnings from
    */
+   // NOTE doesnt distribute rewards, emergency only 
   function rescue(uint256[] calldata tokenIds) external {
     require(rescueEnabled, "RESCUE DISABLED");
     uint256 tokenId;
@@ -232,6 +240,7 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
    * add $GOLD to claimable pot for the Pool
    * @param amount $GOLD to add to the pot
    */
+  // NOTE  Looks good 
   function _payBanditTax(uint256 amount) internal {
     if (totalBanditStaked == 0) { // if there's no staked wolves
       unaccountedRewards += amount; // keep track of $GOLD due to wolves
@@ -245,6 +254,7 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
   /**
    * tracks $GOLD earnings to ensure it stops once 7.5 million is eclipsed
    */
+   // NOTE check rewards math 
   modifier _updateEarnings() {
     if (totalGoldEarned < MAXIMUM_GLOBAL_GOLD) {
       totalGoldEarned += 
@@ -306,6 +316,7 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
     seed >>= 32;
     if (bucket < totalBanditStaked)
       return pool[seed % totalBanditStaked].owner;
+      // NOTE This has 1/totalBanditStaked chances of burning the NFT instead. Ask owners
     return address(0x0);
   }
 
@@ -314,6 +325,7 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
    * @param seed a value ensure different outcomes for different sources in the same block
    * @return a pseudorandom value
    */
+   // TODO Change 
   function random(uint256 seed) internal view returns (uint256) {
     return uint256(keccak256(abi.encodePacked(
       tx.origin,
@@ -329,6 +341,7 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
         uint256,
         bytes calldata
     ) external pure override returns (bytes4) {
+      // NOTE only safeMint, no safeTransfer
       require(from == address(0x0), "Cannot send tokens to Pool directly");
       return IERC721Receiver.onERC721Received.selector;
     }

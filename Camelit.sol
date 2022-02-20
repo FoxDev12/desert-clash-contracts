@@ -32,8 +32,10 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
       uint8 numTraits;
     }
   SingleTrait[] traitsProbabilities;  
-
-
+// Addresses for withdraw function (dev = me) TODO populate with real values
+  address public constant devWallet;
+  address public constant ownerWallet;
+  address public constant liquidityWallet;
   // reference to the Pool for choosing random Bandit
   IPool public pool;
   // reference to $GOLD for burning on mint
@@ -44,7 +46,6 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   /** 
    * instantiates contract and rarity tables
    */
-
   constructor(address _gold, address _traits, uint256 _maxTokens) ERC721("Desert Clash Game", 'DesertGAME') { 
     gold = GOLD(_gold);
     traits = ITraits(_traits);
@@ -292,7 +293,11 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
    */
   // @NOTE talk with owners about hardcoding equity 
   function withdraw() external onlyOwner {
-    payable(owner()).transfer(address(this).balance);
+    uint256 balance = WETH.balanceOf(address(this)); 
+    WETH.transfer((35*balance)/100, liquidityWallet);
+    WETH.transfer((3*balance)/100, devWallet);
+    // Transfer whats left
+    WETH.transfer(WETH.balanceOf(address(this)), ownerWallet);
   }
 
   /**
