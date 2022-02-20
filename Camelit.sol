@@ -9,6 +9,7 @@ import "./IPool.sol";
 import "./ITraits.sol";
 import "./GOLD.sol";
 // @NOTE Look more deeply into the whole trait mechanism 
+// TODO style inconsistencies
 contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
 
   // mint price
@@ -57,13 +58,13 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
     // trees
     traitProbabilities[1] = (0,6);
     // Necklace
-    traitProbabilities[2] = (8,2); // 1/8 chance of something
+    traitProbabilities[2] = (7,2); // 1/8 chance of something
     // Headwear
-    traitProbabilities[3] = (4,5);
+    traitProbabilities[3] = (3,5);
     // Back Accessories
-    traitProbabilities[4] = (2,9);
+    traitProbabilities[4] = (1,9);
     // Smoking Stuff
-    traitProbabilities[5] = (4,4);
+    traitProbabilities[5] = (3,4);
     
 
     // Bandits
@@ -72,11 +73,11 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
     // Eyes
     traitProbabilities[7] = (0,4);
     // Face Accessories
-    traitProbabilities[8] = (10,5);
+    traitProbabilities[8] = (9,5);
     // Weapons
-    traitProbabilities[9] = (2,5);
+    traitProbabilities[9] = (1,5);
     // Companions
-    traitProbabilities[10] = (5,6);
+    traitProbabilities[10] = (4,6);
     // Have to add in a whole special case for 11 
 
 
@@ -105,7 +106,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
     for (uint i = 0; i < amount; i++) {
       minted++;
       seed = random(minted);
-      generate(minted, seed);
+      generate(minted, seed);   
       address recipient = selectRecipient(seed);
       if (!stake || recipient != _msgSender()) {
         _safeMint(recipient, minted);
@@ -164,7 +165,6 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
     }
     return generate(tokenId, random(seed));
   }
-
   /**
    * uses A.J. Walker's Alias algorithm for O(1) rarity table lookup
    * ensuring O(1) instead of O(n) reduces mint cost by more than 50%
@@ -173,10 +173,13 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
    * @param traitType the trait type to select a trait for 
    * @return the ID of the randomly selected trait
    */
+   // NOTE Should work ig? 
   function selectTrait(uint16 seed, uint8 traitType) internal view returns (uint8) {
-    uint8 trait = uint8(seed) % uint8(rarities[traitType].length);
-    if (seed >> 8 < rarities[traitType][trait]) return trait;
-    return aliases[traitType][trait];
+    if(traitProbabilites[traitType].pNothing != 0) {
+      uint8(seed) % traitProbabilites[traitType].pNothing == 0 ? continue : return(0);
+    }
+    uint8 trait = (uint8(seed) % (traitProbabilites[traitType].numTraits - 1)) + 1;
+    return trait;
   }
 
   /**
@@ -198,11 +201,8 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
    * @return t -  a struct of randomly selected traits
    */
   function selectTraits(uint256 seed) internal view returns (CamelBandit memory t) {    
-    // 1/10, doesnt enforce that theres actually 10% bandits though, hardcode this.  
     t.isCamel = (seed & 0xFFFF) % 10 != 0;
-    // NOTE Mitigation
     if (!t.isCamel) {
-      // NOTE superior or equal, even if it should never happen anyways)
       if(banditsMinted >= MAX_BANDITS) {
         t.isCamel = true;
       }
@@ -211,33 +211,23 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
       }
     }
     uint8 shift = t.isCamel ? 0 : 6;
-    // NOTE
-    /**
-    *
-    * Select 2 bytes from the seed 
-    * (sequentially, so 1st 2 bytes are used to generate the 1st trait etc) 
-    * (given that the seed is 32 bytes and we generate 7 traits, some of the seed is actually never used )
-    * logical AND them with 0xFFFF, which um... does nothing? Why? Is it supposed to make the code look scarier?
-    * (Wastes gas anyways, so cut that out)
-    * 
-    */  
-    // TLDR this code is awful 
+
     seed >>= 16;
-    t.fur = selectTrait(uint16(seed), 0 + shift);
+    t.background = selectTrait(uint16(seed), 0 + shift);
     seed >>= 16;
-    t.head = selectTrait(uint16(seed), 1 + shift);
+    t.eyesOrTree = selectTrait(uint16(seed), 1 + shift);
     seed >>= 16;
-    t.ears = selectTrait(uint16(seed), 2 + shift);
+    t.faceOrNeck = selectTrait(uint16(seed), 2 + shift);
     seed >>= 16;
-    t.eyes = selectTrait(uint16(seed), 3 + shift);
+    t.weaponsOrHead = selectTrait(uint16(seed), 3 + shift);
     seed >>= 16;
-    t.nose = selectTrait(uint16(seed), 4 + shift);
+    t.companionsOrBack = selectTrait(uint16(seed), 4 + shift);
     seed >>= 16;
     // yeah. 
     if(t.isCamel) {
-    t.mouth = selectTrait(uint16(seed), 5 + shift);    }
+    t.nullOrSmokingStuff = selectTrait(uint16(seed), 5 + shift);    }
     else{
-      t.mouth = 0;
+      t.nullOrSmokingStuff = 0;
     } 
   }
 
@@ -250,16 +240,11 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
     return uint256(keccak256(
       abi.encodePacked(
         s.isCamel,
-        s.fur,
-        s.head,
-        s.eyes,
-        s.nose,
-        s.mouth,
-        s.ears,
-        s.neck,
-        s.body,
-        s.legs,
-        s.feet
+        s.background,
+        s.eyesOrTree,
+        s.faceOrNeck,
+        s.weaponsOrHead,
+        s.companionsOrBack,
       )
     ));
   }

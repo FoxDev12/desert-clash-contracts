@@ -71,7 +71,7 @@ Half of the stolen $GOLD is burned, and the other half is sent to the Bandits
 ## Art
 
 For the 1250 bandits, we have 6 trait categories (including the basemodel). I&#39;m going to list them from the layer most in the background to the layer most upfront:
-
+    
 - Background -- all with equal rarity
 - Bandit -- this is the basemodel
 - Eyes -- all with equal rarity
