@@ -17,7 +17,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   // max number of tokens that can be minted - 15000 in production
   uint256 public immutable MAX_TOKENS;
   // number of tokens that are minted with WETH - 50% of MAX_TOKENS
-  uint256 public immutable PAID_TOKENS;
+  uint256 public paidTokens;
   // number of tokens have been minted so far
   uint16 public minted;
   uint256 public banditsMinted;
@@ -31,57 +31,58 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
       uint8 pNothing;
       uint8 numTraits;
     }
-  SingleTrait[] traitsProbabilities;  
+  SingleTrait[] traitProbabilities;  
 // Addresses for withdraw function (dev = me) TODO populate with real values
-  address public constant devWallet;
-  address public constant ownerWallet;
-  address public constant liquidityWallet;
+  address public immutable devWallet;
+  address public immutable ownerWallet;
+  address public immutable liquidityWallet;
   // reference to the Pool for choosing random Bandit
   IPool public pool;
   // reference to $GOLD for burning on mint
   GOLD public gold;
+  // The WETH token contract
+  IERC20 public WETH;
   // reference to Traits
   ITraits public traits;
   // NOTE well i like code that i can understand, upon reading about AJ Walkers alias algorithm, it sounds absolutely great, but im stupid so i'll do without x) 
   /** 
    * instantiates contract and rarity tables
    */
-  constructor(address _gold, address _traits, uint256 _maxTokens) ERC721("Desert Clash Game", 'DesertGAME') { 
+  constructor(address _gold, address _traits, uint256 _maxTokens, address _devWallet, address _ownerWallet, address _liquidityWallet) ERC721("Desert Clash Game", 'DesertGAME') { 
     gold = GOLD(_gold);
     traits = ITraits(_traits);
     MAX_TOKENS = _maxTokens;
-    PAID_TOKENS = _maxTokens / 2;
+    paidTokens = _maxTokens / 2;
     MAX_BANDITS = _maxTokens / 10;
-    // Rewriting gen algo TODO : we only have 2 cases : all with same rarities / Nothing or all with same rarities, probably only store p(nothing) and the number of traits for each trait. 
-
+    devWallet = _devWallet;
+    ownerWallet = _ownerWallet;
+    liquidityWallet = _liquidityWallet;
     // background
-    traitProbabilities[0] = (0,9);
-    // trees
-    traitProbabilities[1] = (0,6);
-    // Necklace
-    traitProbabilities[2] = (7,2); // 1/8 chance of something
-    // Headwear
-    traitProbabilities[3] = (3,5);
-    // Back Accessories
-    traitProbabilities[4] = (1,9);
-    // Smoking Stuff
-    traitProbabilities[5] = (3,4);
+    traitProbabilities[0] = SingleTrait({pNothing: 0, numTraits: 9});
+    // trees 0 6
+    traitProbabilities[1] = SingleTrait({pNothing: 0, numTraits: 6});
+    // Necklace 7 2
+    traitProbabilities[2] = SingleTrait({pNothing: 7, numTraits: 2}); // 1/8 chance of something
+    // Headwear 3 5
+    traitProbabilities[3] = SingleTrait({pNothing: 3, numTraits: 5});
+    // Back Accessories 1 9 
+    traitProbabilities[4] = SingleTrait({pNothing: 1, numTraits: 9});
+    // Smoking Stuff 3 4 
+    traitProbabilities[5] = SingleTrait({pNothing: 3, numTraits: 4});
     
 
     // Bandits
-    // Background
-    traitProbabilities[6] = (0,9);
+    // Background 
+    traitProbabilities[6] = SingleTrait({pNothing: 0, numTraits: 9});
     // Eyes
-    traitProbabilities[7] = (0,4);
+    traitProbabilities[7] = SingleTrait({pNothing: 0, numTraits: 4});
     // Face Accessories
-    traitProbabilities[8] = (9,5);
+    traitProbabilities[8] = SingleTrait({pNothing: 9, numTraits: 5});
     // Weapons
-    traitProbabilities[9] = (1,5);
+    traitProbabilities[9] = SingleTrait({pNothing: 1, numTraits: 5});
     // Companions
-    traitProbabilities[10] = (4,6);
-    // Have to add in a whole special case for 11 
-
-
+    traitProbabilities[10] = SingleTrait({pNothing: 4, numTraits: 6});
+  }
   /** EXTERNAL */
 
   /** 
@@ -94,14 +95,13 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
     require(tx.origin == _msgSender(), "Only EOA");
     require(minted + amount <= MAX_TOKENS, "All tokens minted");
     require(amount > 0 && amount <= 5, "Invalid mint amount");
-    if (minted < PAID_TOKENS) {
-      require(minted + amount <= PAID_TOKENS, "All tokens on-sale already sold");
+    if (minted < paidTokens) {
+      require(minted + amount <= paidTokens, "All tokens on-sale already sold");
       require(WETH.transferFrom(msg.sender, address(this), amount * MINT_PRICE), "CamelNFT: transferFrom failed");  
     } else {
-      require(gold.burn(msg.sender, getPrice(amount, firstTokenID)), "CamelNFT: $GOLD burn failed");
+      gold.burn(msg.sender, getPrice(amount, minted));
     }
 
-    uint256 totalGold = 0;
     uint16[] memory tokenIds = stake ? new uint16[](amount) : new uint16[](0);
     uint256 seed;
     for (uint i = 0; i < amount; i++) {
@@ -117,10 +117,17 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
       }
     }
     
-    if (totalGold > 0) gold.burn(_msgSender(), totalGold);
     if (stake) pool.addManyToPool(_msgSender(), tokenIds);
   }
-
+  function ownerMint(uint256 amount) external onlyOwner {
+    require(minted + amount <= 500);
+    for (uint i = 0; i < amount; i++) {
+      minted++;
+      uint256 seed = random(minted);
+      generate(minted, seed);   
+      _safeMint(msg.sender, minted);
+      }
+    }
 
   function transferFrom(
     address from,
@@ -176,10 +183,12 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
    */
    // NOTE Should work ig? 
   function selectTrait(uint16 seed, uint8 traitType) internal view returns (uint8) {
-    if(traitProbabilites[traitType].pNothing != 0) {
-      uint8(seed) % traitProbabilites[traitType].pNothing == 0 ? continue : return(0);
+    if(traitProbabilities[traitType].pNothing != 0) {
+      if (uint8(seed) % traitProbabilities[traitType].pNothing == 0) {
+          return(0);
+      }
     }
-    uint8 trait = (uint8(seed) % (traitProbabilites[traitType].numTraits - 1)) + 1;
+    uint8 trait = (uint8(seed) % (traitProbabilities[traitType].numTraits - 1)) + 1;
     return trait;
   }
 
@@ -190,8 +199,8 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
    * @return the address of the recipient (either the minter or the bandit's owner)
    */
   function selectRecipient(uint256 seed) internal view returns (address) {
-    if (minted <= PAID_TOKENS || ((seed >> 245) % 10) != 0) return _msgSender(); // top 10 bits haven't been used
-    address thief = pool.randomWolfOwner(seed >> 160); // 160 bits reserved for trait selection
+    if (minted <= paidTokens || ((seed >> 245) % 10) != 0) return _msgSender(); // top 10 bits haven't been used
+    address thief = pool.randomBanditOwner(seed >> 160); // 160 bits reserved for trait selection
     if (thief == address(0x0)) return _msgSender();
     return thief;
   }
@@ -201,7 +210,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
    * @param seed a pseudorandom 256 bit number to derive traits from
    * @return t -  a struct of randomly selected traits
    */
-  function selectTraits(uint256 seed) internal view returns (CamelBandit memory t) {    
+  function selectTraits(uint256 seed) internal returns (CamelBandit memory t) {    
     t.isCamel = (seed & 0xFFFF) % 10 != 0;
     if (!t.isCamel) {
       if(banditsMinted >= MAX_BANDITS) {
@@ -246,6 +255,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
         s.faceOrNeck,
         s.weaponsOrHead,
         s.companionsOrBack,
+        s.nullOrSmokingStuff
       )
     ));
   }
@@ -275,7 +285,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   }
 
   function getPaidTokens() external view override returns (uint256) {
-    return PAID_TOKENS;
+    return paidTokens;
   }
 
   /** ADMIN */
@@ -294,17 +304,17 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   // @NOTE talk with owners about hardcoding equity 
   function withdraw() external onlyOwner {
     uint256 balance = WETH.balanceOf(address(this)); 
-    WETH.transfer((35*balance)/100, liquidityWallet);
-    WETH.transfer((3*balance)/100, devWallet);
+    WETH.transfer(liquidityWallet, (35*balance)/100);
+    WETH.transfer(devWallet, (3*balance)/100);
     // Transfer whats left
-    WETH.transfer(WETH.balanceOf(address(this)), ownerWallet);
+    WETH.transfer(ownerWallet, WETH.balanceOf(address(this)));
   }
 
   /**
    * updates the number of tokens for sale
    */
   function setPaidTokens(uint256 _paidTokens) external onlyOwner {
-    PAID_TOKENS = _paidTokens;
+    paidTokens = _paidTokens;
   }
 
   /**

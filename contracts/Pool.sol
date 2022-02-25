@@ -1,19 +1,21 @@
 // SPDX-License-Identifier: MIT LICENSE
 
 pragma solidity ^0.8.0;
+// NOTE style : Error messages
+// TODO Many redundent checks 
+
 // NOTE calculating the amount received/camel is easy af. Bandit is done masterchef style. Probably optimal. 
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
-
 import "./Camelit.sol";
 import "./GOLD.sol";
 // NOTE this barely changed compared to the original contract
-contract Pool is Ownable, IERC721Receiver, Pausable {
+contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
   
-  // maximum alpha score for a Wolf
-  uint8 public constant MAX_ALPHA = 8;
+
 
   // struct to store a stake's token, owner, and earning values
+  // NOTE Exactly 1 slot, cant get any better 
   struct Stake {
     uint16 tokenId;
     uint80 value;
@@ -30,26 +32,18 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
   GOLD gold;
 
   // maps tokenId to stake
-  mapping(uint256 => Stake) public pool; 
-//   // maps alpha to all Bandit stakes with that alpha
-//   mapping(uint256 => Stake[]) public pack; 
-//   // tracks location of each Bandit in Pack
-//   mapping(uint256 => uint256) public packIndices; 
-//   // total alpha scores staked
-//   uint256 public totalAlphaStaked = 0; 
+  mapping(uint256 => Stake) public pool;  
   // any rewards distributed when no bandits are staked
   uint256 public unaccountedRewards = 0; 
-  // amount of $GOLD due for each alpha point staked
-  uint256 public goldPerBandit = 0; 
+  // amount of $GOLD due for each bandit staked
+  uint256 public goldPerBandit; 
 
   // camel earn 20 $GOLD per day
   uint256 public constant DAILY_GOLD_RATE = 20 ether;
-//   // sheep must have 2 days worth of $WOOL to unstake or else it's too cold
-//   uint256 public constant MINIMUM_TO_EXIT = 2 days;
   // bandits take a 15% tax on all $GOLD claimed
   uint256 public constant GOLD_CLAIM_TAX_PERCENTAGE = 15;
-  // there will only ever be (roughly) 2.4 billion $WOOL earned through staking
-  uint256 public constant MAXIMUM_GLOBAL_GOLD = 7500000 ether;
+  // there will only ever be (roughly) 6.5M $GOLD earned through staking
+  uint256 public constant MAXIMUM_GLOBAL_GOLD = 6500000 ether;
 
   // amount of $GOLD earned so far
   uint256 public totalGoldEarned;
@@ -75,14 +69,15 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
   /** STAKING */
 
   /**
-   * adds Camels and Bandits to the Pool and Pack
+   * adds Camels and Bandits to the Pool and Pack (?)
    * @param account the address of the staker
    * @param tokenIds the IDs of the Camels and Bandits to stake
    */
-  function addManyToPoolAndPack(address account, uint16[] calldata tokenIds) external {
+  function addManyToPool(address account, uint16[] calldata tokenIds) external override {
     require(account == _msgSender() || _msgSender() == address(camelit), "DONT GIVE YOUR TOKENS AWAY");
     for (uint i = 0; i < tokenIds.length; i++) {
       if (_msgSender() != address(camelit)) { // dont do this step if its a mint + stake
+      // Useless, prevents contracts from interacting upon approval though. 
         require(camelit.ownerOf(tokenIds[i]) == _msgSender(), "AINT YO TOKEN");
         camelit.transferFrom(_msgSender(), address(this), tokenIds[i]);
       } else if (tokenIds[i] == 0) {
@@ -101,8 +96,9 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
    * @param account the address of the staker
    * @param tokenId the ID of the Camelit to add to the Pool
    */
-  function _addCamelitToPool(address account, uint256 tokenId, bool carmel) internal whenNotPaused _updateEarnings {
-    if (carmel) {
+   // NOTE carmel
+  function _addCamelitToPool(address account, uint256 tokenId, bool camel) internal whenNotPaused _updateEarnings {
+    if (camel) {
         pool[tokenId] = Stake({
         owner: account,
         tokenId: uint16(tokenId),
@@ -131,42 +127,42 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
    // TODO Add stealing logic 
   function claimManyFromPool(uint16[] calldata tokenIds, bool unstake) external whenNotPaused _updateEarnings {
     uint256 owed = 0;
-    uint256 owedToBandits;
     for (uint i = 0; i < tokenIds.length; i++) {
       if (isCamel(tokenIds[i]))
-        (owed, owedToBandits) += _claimCamelFromPool(tokenIds[i], unstake);
+        owed += _claimCamelFromPool(tokenIds[i], unstake);
       else
         owed += _claimBanditFromPool(tokenIds[i], unstake);
     }
-    if (owedToBandits > 0) {
-    goldPerBandit += owedToBandits / totalBanditStaked;
-    }
-    unaccountedRewards = 0;
     if (owed == 0) return;
     gold.mint(_msgSender(), owed);
   }
 
   /**
    * realize $GOLD earnings for a single Camel and optionally unstake it
-   * pay a 15% tax to the staked Wolves
+   * pay a 15% tax to the staked Bandits
    * @param tokenId the ID of the Camel to claim earnings from
    * @param unstake whether or not to unstake the Camel
    * @return owed - the amount of $GOLD earned
    */
+
   function _claimCamelFromPool(uint256 tokenId, bool unstake) internal returns (uint256 owed) {
     Stake memory stake = pool[tokenId];
     require(stake.owner == _msgSender(), "SWIPER, NO SWIPING");
-    require(!(unstake), "UNSTAKING TOKEN"); // um what? 
     if (totalGoldEarned < MAXIMUM_GLOBAL_GOLD) {
       owed = (block.timestamp - stake.value) * DAILY_GOLD_RATE / 1 days;
     } else if (stake.value > lastClaimTimestamp) {
-      owed = 0; // $WOOL production stopped already
+      owed = 0; // Mint has already ended
     } else {
       owed = (lastClaimTimestamp - stake.value) * DAILY_GOLD_RATE / 1 days; // stop earning additional $GOLD if it's all been earned
     }
+    bool isStolen = attemptStealing(stake.value);
+    if(!isStolen) {
     _payBanditTax(owed * GOLD_CLAIM_TAX_PERCENTAGE / 100); // percentage tax to staked bandits
     owed = owed * (100 - GOLD_CLAIM_TAX_PERCENTAGE) / 100; // remainder goes to Camel owner
-
+    }
+    else {
+      goldPerBandit += owed / totalBanditStaked;
+    }
     if (unstake) {
       camelit.safeTransferFrom(address(this), _msgSender(), tokenId, ""); // send back Camel
       delete pool[tokenId];
@@ -180,6 +176,13 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
     }
     emit CamelClaimed(tokenId, owed, unstake);
   }
+  function attemptStealing(uint256 timestamp) internal view returns(bool) {
+    uint256 randomValue = random(uint256(uint160(msg.sender)) + block.timestamp);
+    uint256 numDays = (block.timestamp - timestamp) / 1 days;
+    numDays = (numDays > 9) ? 9 : numDays;
+    uint256 probStealing = 55 - (5 * numDays);
+    return((randomValue % 99) < probStealing); 
+  }
 
   /**
    * realize $GOLD earnings for a single Bandit and optionally unstake it
@@ -188,14 +191,15 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
    * @param unstake whether or not to unstake the Bandit
    * @return owed - the amount of $GOLD earned
    */
-   // stake.owner == tx.origin maybe? or enforce transfer to the owner? 
+   // stake.owner == tx.origin maybe? or enforce transfer to the owner?
+   // NOTE transfer to owner approach chosen
   function _claimBanditFromPool(uint256 tokenId, bool unstake) internal returns (uint256 owed) {
+    // omfg
     require(camelit.ownerOf(tokenId) == address(this), "AINT A PART OF THE POOL");
     Stake memory stake = pool[tokenId];
-    require(stake.owner == _msgSender(), "SWIPER, NO SWIPING");
     owed = goldPerBandit - stake.value; // Calculate portion of tokens based
     if (unstake) {
-      camelit.safeTransferFrom(address(this), _msgSender(), tokenId, ""); // Send back Wolf
+      camelit.safeTransferFrom(address(this), stake.owner, tokenId, "");
       delete pool[tokenId];
     } else {
       pool[tokenId] = Stake({
@@ -292,7 +296,7 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
    * @return camel - whether or not a token is a Camel
    */
   function isCamel(uint256 tokenId) public view returns (bool camel) {
-    (camel, , , , , , , , , ,) = camelit.tokenTraits(tokenId);
+    (camel,,,,,,) = camelit.tokenTraits(tokenId);
   }
 
 //   /**
@@ -310,7 +314,7 @@ contract Pool is Ownable, IERC721Receiver, Pausable {
    * @param seed a random value to choose a Bandit from
    * @return the owner of the randomly selected Bandit
    */
-  function randomBanditOwner(uint256 seed) external view returns (address) {
+  function randomBanditOwner(uint256 seed) external override view returns (address) {
     if (totalBanditStaked == 0) return address(0x0);
     uint256 bucket = (seed & 0xFFFFFFFF) % totalBanditStaked; // choose a value from 0 to total bandit staked
     seed >>= 32;

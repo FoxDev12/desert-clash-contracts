@@ -15,19 +15,21 @@ contract Traits is Ownable, ITraits {
     string name;
     string png;
   }
-
+  // NOTE shift is 6
   // mapping from trait type (index) to its name
-  string[10] _traitTypes = [
-    "Fur",
-    "Head",
-    "Ears",
+  string[11] _traitTypes = [
+    "Background",
+    "Tree", 
+    "Necklace",
+    "Headwear",
+    "Back Accessories",
+    "Smoking",
+    // Begin bandit
+    "Background",
     "Eyes",
-    "Nose",
-    "Mouth",
-    "Neck",
-    "Body",
-    "Legs",
-    "Feet"
+    "Face Accessories",
+    "Weapon",
+    "Companion"
   ];
   // storage of each traits name and base64 PNG data
   mapping(uint8 => mapping(uint8 => Trait)) public traitData;
@@ -87,19 +89,15 @@ contract Traits is Ownable, ITraits {
    */
   function drawSVG(uint256 tokenId) public view returns (string memory) {
     ICamelit.CamelBandit memory s = camelit.getTokenTraits(tokenId);
-    uint8 shift = s.isCamel ? 0 : 10;
+    uint8 shift = s.isCamel ? 0 : 6;
 
     string memory svgString = string(abi.encodePacked(
-      drawTrait(traitData[0 + shift][s.fur]),
-      s.isCamel ? drawTrait(traitData[1 + shift][s.head]) : drawTrait(traitData[1 + shift][s.head]),
-      s.isCamel ? drawTrait(traitData[2 + shift][s.ears]) : '',
-      drawTrait(traitData[3 + shift][s.eyes]),
-      s.isCamel ? drawTrait(traitData[4 + shift][s.nose]) : '',
-      drawTrait(traitData[5 + shift][s.mouth]),
-      s.isCamel ? '' : drawTrait(traitData[6 + shift][s.neck]),
-      s.isCamel ? '' : drawTrait(traitData[7 + shift][s.body]),
-      s.isCamel ? '' : drawTrait(traitData[8 + shift][s.legs]),
-      s.isCamel ? drawTrait(traitData[9 + shift][s.feet]) : ''
+      drawTrait(traitData[0 + shift][s.background]),
+      drawTrait(traitData[1 + shift][s.eyesOrTree]),
+      drawTrait(traitData[2 + shift][s.faceOrNeck]),
+      drawTrait(traitData[3 + shift][s.faceOrNeck]),
+      drawTrait(traitData[4 + shift][s.faceOrNeck]),
+      s.isCamel ? drawTrait(traitData[5 + shift][s.faceOrNeck]) : ''
     ));
 
     return string(abi.encodePacked(
@@ -115,6 +113,7 @@ contract Traits is Ownable, ITraits {
    * @param value the token's trait associated with the key
    * @return a JSON dictionary for the single attribute
    */
+
   function attributeForTypeAndValue(string memory traitType, string memory value) internal pure returns (string memory) {
     return string(abi.encodePacked(
       '{"trait_type":"',
@@ -135,21 +134,20 @@ contract Traits is Ownable, ITraits {
     string memory traits;
     if (s.isCamel) {
       traits = string(abi.encodePacked(
-        attributeForTypeAndValue(_traitTypes[0], traitData[0][s.fur].name),',',
-        attributeForTypeAndValue(_traitTypes[1], traitData[1][s.head].name),',',
-        attributeForTypeAndValue(_traitTypes[2], traitData[2][s.ears].name),',',
-        attributeForTypeAndValue(_traitTypes[3], traitData[3][s.eyes].name),',',
-        attributeForTypeAndValue(_traitTypes[4], traitData[4][s.nose].name),',',
-        attributeForTypeAndValue(_traitTypes[5], traitData[5][s.mouth].name),',',
-        attributeForTypeAndValue(_traitTypes[7], traitData[7][s.feet].name),','
+        attributeForTypeAndValue(_traitTypes[0], traitData[0][s.background].name),',',
+        attributeForTypeAndValue(_traitTypes[1], traitData[1][s.eyesOrTree].name),',',
+        attributeForTypeAndValue(_traitTypes[2], traitData[2][s.faceOrNeck].name),',',
+        attributeForTypeAndValue(_traitTypes[3], traitData[3][s.weaponsOrHead].name),',',
+        attributeForTypeAndValue(_traitTypes[4], traitData[4][s.companionsOrBack].name),',',
+        attributeForTypeAndValue(_traitTypes[5], traitData[5][s.nullOrSmokingStuff].name),','
       ));
     } else {
       traits = string(abi.encodePacked(
-        attributeForTypeAndValue(_traitTypes[0], traitData[9][s.fur].name),',',
-        attributeForTypeAndValue(_traitTypes[1], traitData[10][s.head].name),',',
-        attributeForTypeAndValue(_traitTypes[3], traitData[12][s.eyes].name),',',
-        attributeForTypeAndValue(_traitTypes[5], traitData[14][s.mouth].name),',',
-        attributeForTypeAndValue(_traitTypes[6], traitData[15][s.neck].name),','
+        attributeForTypeAndValue(_traitTypes[6], traitData[6][s.background].name),',',
+        attributeForTypeAndValue(_traitTypes[7], traitData[7][s.eyesOrTree].name),',',
+        attributeForTypeAndValue(_traitTypes[8], traitData[9][s.faceOrNeck].name),',',
+        attributeForTypeAndValue(_traitTypes[9], traitData[9][s.weaponsOrHead].name),',',
+        attributeForTypeAndValue(_traitTypes[10], traitData[10][s.nullOrSmokingStuff].name),','
       ));
     }
     return string(abi.encodePacked(
