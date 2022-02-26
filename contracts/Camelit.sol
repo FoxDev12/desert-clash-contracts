@@ -16,8 +16,8 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   uint256 public constant MINT_PRICE = 0.03 ether;
   // max number of tokens that can be minted - 15000 in production
   uint256 public immutable MAX_TOKENS;
-  // number of tokens that are minted with WETH - 50% of MAX_TOKENS
-  uint256 public paidTokens;
+  // number of tokens that are minted with WETH
+  uint256 public immutable paidTokens = 5000;
   // number of tokens have been minted so far
   uint16 public minted;
   uint256 public banditsMinted;
@@ -31,7 +31,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
       uint8 pNothing;
       uint8 numTraits;
     }
-  SingleTrait[] traitProbabilities;  
+  SingleTrait[11] traitProbabilities;  
 // Addresses for withdraw function (dev = me) TODO populate with real values
   address public immutable devWallet;
   address public immutable ownerWallet;
@@ -46,13 +46,12 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   ITraits public traits;
   // NOTE well i like code that i can understand, upon reading about AJ Walkers alias algorithm, it sounds absolutely great, but im stupid so i'll do without x) 
   /** 
-   * instantiates contract and rarity tables
-   */
-  constructor(address _gold, address _traits, uint256 _maxTokens, address _devWallet, address _ownerWallet, address _liquidityWallet) ERC721("Desert Clash Game", 'DesertGAME') { 
+   * instantiates contract */
+
+  constructor(address _gold, address _traits, uint256 _maxTokens, address _devWallet, address _ownerWallet, address _liquidityWallet) ERC721("Desert Clash", 'DesertGAME') { 
     gold = GOLD(_gold);
     traits = ITraits(_traits);
     MAX_TOKENS = _maxTokens;
-    paidTokens = _maxTokens / 2;
     MAX_BANDITS = _maxTokens / 10;
     devWallet = _devWallet;
     ownerWallet = _ownerWallet;
