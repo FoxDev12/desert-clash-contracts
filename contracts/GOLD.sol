@@ -3,7 +3,6 @@
 pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-// NOTE Looks good 
 contract GOLD is ERC20, Ownable {
   // a mapping from an address to whether or not it can mint / burn
   mapping(address => bool) controllers;

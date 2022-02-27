@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: MIT LICENSE
 
 pragma solidity ^0.8.0;
-// NOTE style : Error messages
-// TODO Many redundent checks 
 
-// NOTE calculating the amount received/camel is easy af. Bandit is done masterchef style. Probably optimal. 
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "./Camelit.sol";
 import "./GOLD.sol";
+import "./IPool.sol";
+ 
 contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
   // struct to store a stake's token, owner, and earning values
   struct Stake {
@@ -308,7 +307,6 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
    * @param seed a value ensure different outcomes for different sources in the same block
    * @return a pseudorandom value
    */
-   // TODO Change 
   function random(uint256 seed) internal view returns (uint256) {
     return uint256(keccak256(abi.encodePacked(
       tx.origin,
@@ -324,7 +322,6 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
         uint256,
         bytes calldata
     ) external pure override returns (bytes4) {
-      // NOTE only safeMint, no safeTransfer
       require(from == address(0x0), "Cannot send tokens to Pool directly");
       return IERC721Receiver.onERC721Received.selector;
     }

@@ -5,7 +5,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "./ITraits.sol";
 import "./ICamelit.sol";
-// NOTE Not reviewed yet. Research on chain vector graphics generation 
 contract Traits is Ownable, ITraits {
 
   using Strings for uint256;
