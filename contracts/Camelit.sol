@@ -8,16 +8,14 @@ import "./ICamelit.sol";
 import "./IPool.sol";
 import "./ITraits.sol";
 import "./GOLD.sol";
-// @NOTE Look more deeply into the whole trait mechanism 
-// TODO style inconsistencies
 contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
 
   // mint price
-  uint256 public constant MINT_PRICE = 0.03 ether;
+  uint256 public constant MINT_PRICE = 0.015 ether;
   // max number of tokens that can be minted - 15000 in production
   uint256 public immutable MAX_TOKENS;
-  // number of tokens that are minted with WETH
-  uint256 public immutable paidTokens = 5000;
+  // number of tokens that are minted with WETH - 50% of MAX_TOKENS
+  uint256 public paidTokens = 5000;
   // number of tokens have been minted so far
   uint16 public minted;
   uint256 public banditsMinted;
@@ -32,7 +30,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
       uint8 numTraits;
     }
   SingleTrait[11] traitProbabilities;  
-// Addresses for withdraw function (dev = me) TODO populate with real values
+// Addresses for withdraw function (dev = me)
   address public immutable devWallet;
   address public immutable ownerWallet;
   address public immutable liquidityWallet;
@@ -40,11 +38,10 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   IPool public pool;
   // reference to $GOLD for burning on mint
   GOLD public gold;
-  // The WETH token contract
-  IERC20 public WETH;
+  // The WETH token contract (WETH9 on rinkeby testnet)
+  IERC20 public WETH = IERC20(0xc778417E063141139Fce010982780140Aa0cD5Ab);
   // reference to Traits
   ITraits public traits;
-  // NOTE well i like code that i can understand, upon reading about AJ Walkers alias algorithm, it sounds absolutely great, but im stupid so i'll do without x) 
   /** 
    * instantiates contract */
 
@@ -88,8 +85,6 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
    * mint a token - 90% Camel , 10% Bandit
    * The first 50% are free to claim (no), the remaining cost $GOLD
    */
-  // NOTE price logic now ok  TODO look into generation
-  // TODO Make gold fully ERC20 if not already 
   function mint(uint256 amount, bool stake) external payable whenNotPaused {
     require(tx.origin == _msgSender(), "Only EOA");
     require(minted + amount <= MAX_TOKENS, "All tokens minted");
@@ -148,7 +143,6 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   * @return the required amount to be taken from the minter's address
   * @dev a 'for' loop is okay since we're in memory, and it won't loop more than 5 times anyways
    */
-  // @NOTE more efficient than the previous implementation, and cleaner imo 
 
   function getPrice(uint256 amount, uint256 firstTokenID) internal pure returns(uint256) {
     uint256 totalPrice;
@@ -180,7 +174,6 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
    * @param traitType the trait type to select a trait for 
    * @return the ID of the randomly selected trait
    */
-   // NOTE Should work ig? 
   function selectTrait(uint16 seed, uint8 traitType) internal view returns (uint8) {
     if(traitProbabilities[traitType].pNothing != 0) {
       if (uint8(seed) % traitProbabilities[traitType].pNothing == 0) {
@@ -264,8 +257,6 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
    * @param seed a value ensure different outcomes for different sources in the same block
    * @return a pseudorandom value
    */
-   // NOTE somewhat vulnerable, a lil better now, 
-   // TODO which chain? ask owners. block.coinbase is a bad randomness factor on chains with MEV and on ultra restricted chains like the bsc
   function random(uint256 seed) internal view returns (uint256) {
     return uint256(keccak256(abi.encodePacked(
       tx.origin,
@@ -300,7 +291,6 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   /**
    * allows owner to withdraw funds from minting 
    */
-  // @NOTE talk with owners about hardcoding equity 
   function withdraw() external onlyOwner {
     uint256 balance = WETH.balanceOf(address(this)); 
     WETH.transfer(liquidityWallet, (35*balance)/100);

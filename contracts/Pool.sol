@@ -9,19 +9,13 @@ import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "./Camelit.sol";
 import "./GOLD.sol";
-// NOTE this barely changed compared to the original contract
 contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
-  
-
-
   // struct to store a stake's token, owner, and earning values
-  // NOTE Exactly 1 slot, cant get any better 
   struct Stake {
     uint16 tokenId;
     uint80 value;
     address owner;
   }
-  
   event TokenStaked(address owner, uint256 tokenId, uint256 value);
   event CamelClaimed(uint256 tokenId, uint256 earned, bool unstaked);
   event BanditClaimed(uint256 tokenId, uint256 earned, bool unstaked);
@@ -96,7 +90,6 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
    * @param account the address of the staker
    * @param tokenId the ID of the Camelit to add to the Pool
    */
-   // NOTE carmel
   function _addCamelitToPool(address account, uint256 tokenId, bool camel) internal whenNotPaused _updateEarnings {
     if (camel) {
         pool[tokenId] = Stake({
@@ -124,7 +117,6 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
    * @param tokenIds the IDs of the tokens to claim earnings from
    * @param unstake whether or not to unstake ALL of the tokens listed in tokenIds
    */
-   // TODO Add stealing logic 
   function claimManyFromPool(uint16[] calldata tokenIds, bool unstake) external whenNotPaused _updateEarnings {
     uint256 owed = 0;
     for (uint i = 0; i < tokenIds.length; i++) {
@@ -191,10 +183,8 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
    * @param unstake whether or not to unstake the Bandit
    * @return owed - the amount of $GOLD earned
    */
-   // stake.owner == tx.origin maybe? or enforce transfer to the owner?
-   // NOTE transfer to owner approach chosen
+
   function _claimBanditFromPool(uint256 tokenId, bool unstake) internal returns (uint256 owed) {
-    // omfg
     require(camelit.ownerOf(tokenId) == address(this), "AINT A PART OF THE POOL");
     Stake memory stake = pool[tokenId];
     owed = goldPerBandit - stake.value; // Calculate portion of tokens based
@@ -215,7 +205,6 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
    * emergency unstake tokens
    * @param tokenIds the IDs of the tokens to claim earnings from
    */
-   // NOTE doesnt distribute rewards, emergency only 
   function rescue(uint256[] calldata tokenIds) external {
     require(rescueEnabled, "RESCUE DISABLED");
     uint256 tokenId;
@@ -244,7 +233,6 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
    * add $GOLD to claimable pot for the Pool
    * @param amount $GOLD to add to the pot
    */
-  // NOTE  Looks good 
   function _payBanditTax(uint256 amount) internal {
     if (totalBanditStaked == 0) { // if there's no staked wolves
       unaccountedRewards += amount; // keep track of $GOLD due to wolves
@@ -258,7 +246,6 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
   /**
    * tracks $GOLD earnings to ensure it stops once 7.5 million is eclipsed
    */
-   // NOTE check rewards math 
   modifier _updateEarnings() {
     if (totalGoldEarned < MAXIMUM_GLOBAL_GOLD) {
       totalGoldEarned += 
@@ -299,15 +286,7 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
     (camel,,,,,,) = camelit.tokenTraits(tokenId);
   }
 
-//   /**
-//    * gets the alpha score for a Wolf
-//    * @param tokenId the ID of the Wolf to get the alpha score for
-//    * @return the alpha score of the Wolf (5-8)
-//    */
-//   function _alphaForWolf(uint256 tokenId) internal view returns (uint8) {
-//     ( , , , , , , , , , uint8 alphaIndex) = woolf.tokenTraits(tokenId);
-//     return MAX_ALPHA - alphaIndex; // alpha index is 0-3
-//   }
+
 
   /**
    * chooses a random Bandit when a newly minted token is stolen
