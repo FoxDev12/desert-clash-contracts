@@ -42,6 +42,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   IERC20 public WETH = IERC20(0xc778417E063141139Fce010982780140Aa0cD5Ab);
   // reference to Traits
   ITraits public traits;
+  mapping(address => uint8) minted;
   /** 
    * instantiates contract */
 
@@ -83,12 +84,13 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
 
   /** 
    * mint a token - 90% Camel , 10% Bandit
-   * The first 50% are free to claim (no), the remaining cost $GOLD
+   * The first 5000 cost WETH, the remaining cost $GOLD
    */
   function mint(uint256 amount, bool stake) external payable whenNotPaused {
     require(tx.origin == _msgSender(), "Only EOA");
     require(minted + amount <= MAX_TOKENS, "All tokens minted");
     require(amount > 0 && amount <= 5, "Invalid mint amount");
+    require(minted[msg.sender] + amount <= 35, "Can't mint more tokens");
     if (minted < paidTokens) {
       require(minted + amount <= paidTokens, "All tokens on-sale already sold");
       require(WETH.transferFrom(msg.sender, address(this), amount * MINT_PRICE), "CamelNFT: transferFrom failed");  
@@ -108,6 +110,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
       } else {
         _safeMint(address(pool), minted);
         tokenIds[i] = minted;
+        minted[msg.sender]++;
       }
     }
     
@@ -116,10 +119,10 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   function ownerMint(uint256 amount) external onlyOwner {
     require(minted + amount <= 500);
     for (uint i = 0; i < amount; i++) {
-      minted++;
       uint256 seed = random(minted);
       generate(minted, seed);   
       _safeMint(msg.sender, minted);
+      minted++;
       }
     }
 
