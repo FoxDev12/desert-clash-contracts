@@ -36,7 +36,7 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
   // bandits take a 15% tax on all $GOLD claimed
   uint256 public constant GOLD_CLAIM_TAX_PERCENTAGE = 15;
   // there will only ever be (roughly) 6.5M $GOLD earned through staking
-  uint256 public constant MAXIMUM_GLOBAL_GOLD = 6500000 ether;
+  uint256 public constant MAXIMUM_GLOBAL_GOLD = 6_500_000 ether;
 
   // amount of $GOLD earned so far
   uint256 public totalGoldEarned;
@@ -70,7 +70,6 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
     require(account == _msgSender() || _msgSender() == address(camelit), "DONT GIVE YOUR TOKENS AWAY");
     for (uint i = 0; i < tokenIds.length; i++) {
       if (_msgSender() != address(camelit)) { // dont do this step if its a mint + stake
-      // Useless, prevents contracts from interacting upon approval though. 
         require(camelit.ownerOf(tokenIds[i]) == _msgSender(), "AINT YO TOKEN");
         camelit.transferFrom(_msgSender(), address(this), tokenIds[i]);
       } else if (tokenIds[i] == 0) {
@@ -138,6 +137,7 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
 
   function _claimCamelFromPool(uint256 tokenId, bool unstake) internal returns (uint256 owed) {
     Stake memory stake = pool[tokenId];
+    require(camelit.ownerOf(tokenId) == address(this), "AINT A PART OF THE POOL");
     require(stake.owner == _msgSender(), "SWIPER, NO SWIPING");
     if (totalGoldEarned < MAXIMUM_GLOBAL_GOLD) {
       owed = (block.timestamp - stake.value) * DAILY_GOLD_RATE / 1 days;
@@ -152,7 +152,9 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
     owed = owed * (100 - GOLD_CLAIM_TAX_PERCENTAGE) / 100; // remainder goes to Camel owner
     }
     else {
-      goldPerBandit += owed / totalBanditStaked;
+      uint256 toBandits = owed / 2;
+      // No need to actually burn the second half, it's simply never emitted, but still taken into account in _updateEarnings()
+      goldPerBandit += toBandit / totalBanditStaked;
     }
     if (unstake) {
       camelit.safeTransferFrom(address(this), _msgSender(), tokenId, ""); // send back Camel
@@ -172,7 +174,7 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
     uint256 numDays = (block.timestamp - timestamp) / 1 days;
     numDays = (numDays > 9) ? 9 : numDays;
     uint256 probStealing = 55 - (5 * numDays);
-    return((randomValue % 99) < probStealing); 
+    return((randomValue % 100) < probStealing); 
   }
 
   /**
@@ -185,7 +187,8 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
 
   function _claimBanditFromPool(uint256 tokenId, bool unstake) internal returns (uint256 owed) {
     require(camelit.ownerOf(tokenId) == address(this), "AINT A PART OF THE POOL");
-    Stake memory stake = pool[tokenId];
+    require(stake.owner == _msgSender(), "SWIPER, NO SWIPING");
+      Stake memory stake = pool[tokenId];
     owed = goldPerBandit - stake.value; // Calculate portion of tokens based
     if (unstake) {
       camelit.safeTransferFrom(address(this), stake.owner, tokenId, "");
@@ -243,7 +246,7 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
   }
 
   /**
-   * tracks $GOLD earnings to ensure it stops once 7.5 million is eclipsed
+   * tracks $GOLD earnings to ensure it stops once 6.5 million is eclipsed
    */
   modifier _updateEarnings() {
     if (totalGoldEarned < MAXIMUM_GLOBAL_GOLD) {

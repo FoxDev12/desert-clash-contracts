@@ -13,7 +13,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   // mint price
   uint256 public constant MINT_PRICE = 0.015 ether;
   // max number of tokens that can be minted - 15000 in production
-  uint256 public immutable MAX_TOKENS;
+  uint256 public immutable MAX_TOKENS = 12500;
   // number of tokens that are minted with WETH - 50% of MAX_TOKENS
   uint256 public paidTokens = 5000;
   // number of tokens have been minted so far
@@ -31,9 +31,9 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
     }
   SingleTrait[11] traitProbabilities;  
 // Addresses for withdraw function (dev = me)
-  address public immutable devWallet;
-  address public immutable ownerWallet;
-  address public immutable liquidityWallet;
+  address public immutable devWallet = 0xb9110CE83EaF19ce6722e5970c2f2A25860b1d61;
+  address public immutable ownerWallet = 0xC6Aaa1326b2A7111A196eEedD4B2e76e74e51a3D;
+  address public immutable liquidityWallet = 0x4eaf95f633b6CCf22B38Ecb5bf9739748912F2D3;
   // reference to the Pool for choosing random Bandit
   IPool public pool;
   // reference to $GOLD for burning on mint
@@ -46,7 +46,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   /** 
    * instantiates contract */
 
-  constructor(address _gold, address _traits, uint256 _maxTokens, address _devWallet, address _ownerWallet, address _liquidityWallet) ERC721("Desert Clash", 'DesertGAME') { 
+  constructor(address _gold, address _traits, uint256 _maxTokens) ERC721("Desert Clash", 'DesertGAME') { 
     gold = GOLD(_gold);
     traits = ITraits(_traits);
     MAX_TOKENS = _maxTokens;
@@ -59,13 +59,13 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
     // trees 0 6
     traitProbabilities[1] = SingleTrait({pNothing: 0, numTraits: 6});
     // Necklace 7 2
-    traitProbabilities[2] = SingleTrait({pNothing: 7, numTraits: 2}); // 1/8 chance of something
+    traitProbabilities[2] = SingleTrait({pNothing: 8, numTraits: 2}); 
     // Headwear 3 5
-    traitProbabilities[3] = SingleTrait({pNothing: 3, numTraits: 5});
+    traitProbabilities[3] = SingleTrait({pNothing: 4, numTraits: 5});
     // Back Accessories 1 9 
-    traitProbabilities[4] = SingleTrait({pNothing: 1, numTraits: 9});
+    traitProbabilities[4] = SingleTrait({pNothing: 2, numTraits: 9});
     // Smoking Stuff 3 4 
-    traitProbabilities[5] = SingleTrait({pNothing: 3, numTraits: 4});
+    traitProbabilities[5] = SingleTrait({pNothing: 4, numTraits: 4});
     
 
     // Bandits
@@ -74,11 +74,11 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
     // Eyes
     traitProbabilities[7] = SingleTrait({pNothing: 0, numTraits: 4});
     // Face Accessories
-    traitProbabilities[8] = SingleTrait({pNothing: 9, numTraits: 5});
+    traitProbabilities[8] = SingleTrait({pNothing: 10, numTraits: 5});
     // Weapons
-    traitProbabilities[9] = SingleTrait({pNothing: 1, numTraits: 5});
+    traitProbabilities[9] = SingleTrait({pNothing: 2, numTraits: 5});
     // Companions
-    traitProbabilities[10] = SingleTrait({pNothing: 4, numTraits: 6});
+    traitProbabilities[10] = SingleTrait({pNothing: 5, numTraits: 6});
   }
   /** EXTERNAL */
 
@@ -89,8 +89,8 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   function mint(uint256 amount, bool stake) external payable whenNotPaused {
     require(tx.origin == _msgSender(), "Only EOA");
     require(minted + amount <= MAX_TOKENS, "All tokens minted");
-    require(amount > 0 && amount <= 5, "Invalid mint amount");
-    require(minted[msg.sender] + amount <= 35, "Can't mint more tokens");
+    require(amount > 0 && amount <= 10, "Invalid mint amount");
+    require(minted[msg.sender] + amount <= 40, "Can't mint more tokens");
     if (minted < paidTokens) {
       require(minted + amount <= paidTokens, "All tokens on-sale already sold");
       require(WETH.transferFrom(msg.sender, address(this), amount * MINT_PRICE), "CamelNFT: transferFrom failed");  
@@ -170,16 +170,13 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
     return generate(tokenId, random(seed));
   }
   /**
-   * uses A.J. Walker's Alias algorithm for O(1) rarity table lookup
-   * ensuring O(1) instead of O(n) reduces mint cost by more than 50%
-   * probability & alias tables are generated off-chain beforehand
    * @param seed portion of the 256 bit seed to remove trait correlation
    * @param traitType the trait type to select a trait for 
    * @return the ID of the randomly selected trait
    */
   function selectTrait(uint16 seed, uint8 traitType) internal view returns (uint8) {
     if(traitProbabilities[traitType].pNothing != 0) {
-      if (uint8(seed) % traitProbabilities[traitType].pNothing == 0) {
+      if (uint8(seed) % traitProbabilities[traitType].pNothing != 0) {
           return(0);
       }
     }
@@ -188,8 +185,8 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   }
 
   /**
-   * the first 50% (ETH purchases) go to the minter
-   * the remaining 50% have a 10% chance to be given to a random staked wolf
+   * the first 5000 (ETH purchases) go to the minter
+   * the remaining have a 10% chance to be given to a random staked bandit
    * @param seed a random value to select a recipient from
    * @return the address of the recipient (either the minter or the bandit's owner)
    */
