@@ -9,7 +9,8 @@ import "./IPool.sol";
 import "./ITraits.sol";
 import "./GOLD.sol";
 contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
-
+  
+  mapping (uint256 => uint256) private mintedAt;
   // mint price
   uint256 public constant MINT_PRICE = 0.015 ether;
   // max number of tokens that can be minted - 15000 in production
@@ -42,7 +43,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
   IERC20 public WETH = IERC20(0xc778417E063141139Fce010982780140Aa0cD5Ab);
   // reference to Traits
   ITraits public traits;
-  mapping(address => uint8) minted;
+  mapping(address => uint8) _minted;
   /** 
    * instantiates contract */
 
@@ -56,15 +57,15 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
     liquidityWallet = _liquidityWallet;
     // background
     traitProbabilities[0] = SingleTrait({pNothing: 0, numTraits: 9});
-    // trees 0 6
+    // trees 
     traitProbabilities[1] = SingleTrait({pNothing: 0, numTraits: 6});
-    // Necklace 7 2
+    // Necklace 
     traitProbabilities[2] = SingleTrait({pNothing: 8, numTraits: 2}); 
-    // Headwear 3 5
+    // Headwear
     traitProbabilities[3] = SingleTrait({pNothing: 4, numTraits: 5});
-    // Back Accessories 1 9 
+    // Back Accessories 
     traitProbabilities[4] = SingleTrait({pNothing: 2, numTraits: 9});
-    // Smoking Stuff 3 4 
+    // Smoking Stuff 
     traitProbabilities[5] = SingleTrait({pNothing: 4, numTraits: 4});
     
 
@@ -90,7 +91,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
     require(tx.origin == _msgSender(), "Only EOA");
     require(minted + amount <= MAX_TOKENS, "All tokens minted");
     require(amount > 0 && amount <= 10, "Invalid mint amount");
-    require(minted[msg.sender] + amount <= 40, "Can't mint more tokens");
+    require(_minted[msg.sender] + amount <= 40, "Can't mint more tokens");
     if (minted < paidTokens) {
       require(minted + amount <= paidTokens, "All tokens on-sale already sold");
       require(WETH.transferFrom(msg.sender, address(this), amount * MINT_PRICE), "CamelNFT: transferFrom failed");  
@@ -110,8 +111,10 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
       } else {
         _safeMint(address(pool), minted);
         tokenIds[i] = minted;
-        minted[msg.sender]++;
-      }
+       }
+      _minted[msg.sender]++;
+      
+
     }
     
     if (stake) pool.addManyToPool(_msgSender(), tokenIds);
@@ -270,7 +273,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
 
   /** READ */
 
-  function getTokenTraits(uint256 tokenId) external view override returns (CamelBandit memory) {
+  function getTokenTraits(uint256 tokenId) external view override onlyIfNotJustMinted(tokenId) returns (CamelBandit memory) {
     return tokenTraits[tokenId];
   }
 
@@ -284,7 +287,7 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
    * called after deployment so that the contract can get random wolf thieves
    * @param _pool the address of the Barn
    */
-  function setBarn(address _pool) external onlyOwner {
+  function setPool(address _pool) external onlyOwner {
     pool = IPool(_pool);
   }
 
@@ -316,8 +319,16 @@ contract Camelit is ICamelit, ERC721Enumerable, Ownable, Pausable {
 
   /** RENDER */
 
-  function tokenURI(uint256 tokenId) public view override returns (string memory) {
+  function tokenURI(uint256 tokenId) public view override onlyIfNotJustMinted(tokenId) returns (string memory)  {
     require(_exists(tokenId), "ERC721Metadata: URI query for nonexistent token");
     return traits.tokenURI(tokenId);
   }
+  function tokenMinted(uint256 id) internal {
+     mintedAt[id]= block.number;
+  }
+  modifier onlyIfNotJustMinted(uint256) {
+    require(msg.sender == address(pool) || mintedAt[tokenId] != block.number, "um... no");
+    _;
+  }
 }
+

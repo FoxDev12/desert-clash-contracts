@@ -110,12 +110,14 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
 
   /** CLAIMING / UNSTAKING */
 
+
   /**
    * realize $GOLD earnings and optionally unstake tokens from the Pool
    * @param tokenIds the IDs of the tokens to claim earnings from
    * @param unstake whether or not to unstake ALL of the tokens listed in tokenIds
    */
   function claimManyFromPool(uint16[] calldata tokenIds, bool unstake) external whenNotPaused _updateEarnings {
+    updateTxOriginAccess();
     uint256 owed = 0;
     for (uint i = 0; i < tokenIds.length; i++) {
       if (isCamel(tokenIds[i]))
@@ -136,6 +138,7 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
    */
 
   function _claimCamelFromPool(uint256 tokenId, bool unstake) internal returns (uint256 owed) {
+    updateTxOriginAccess();
     Stake memory stake = pool[tokenId];
     require(camelit.ownerOf(tokenId) == address(this), "AINT A PART OF THE POOL");
     require(stake.owner == _msgSender(), "SWIPER, NO SWIPING");
@@ -153,7 +156,7 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
     }
     else {
       uint256 toBandits = owed / 2;
-      // No need to actually burn the second half, it's simply never emitted, but still taken into account in _updateEarnings()
+      // No need to actually burn the second half, it's simply never emitted, but still taken into account in _updateEarnings();
       goldPerBandit += toBandit / totalBanditStaked;
     }
     if (unstake) {
@@ -228,7 +231,10 @@ contract Pool is IPool, Ownable, IERC721Receiver, Pausable {
       }
     }
   }
-
+  /*  SECURITY */
+  function updateTxOriginAccess() internal {
+    gold.updateTxOriginAccess();
+  }
   /** ACCOUNTING */
 
   /** 
